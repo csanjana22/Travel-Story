@@ -37,7 +37,7 @@ const ImageSelector = ({ images, setImages, handleDeleteImages }) => {
 
         setPreviewUrls(urls);
 
-        // Cleanup function to revoke object URLs
+       
         return () => {
             urls.forEach(url => {
                 if (typeof url === 'string' && !url.startsWith('http')) {

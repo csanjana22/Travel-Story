@@ -11,11 +11,14 @@ const TravelStoryCard = ({
     visitedLocation=[],
     isFavourite,
     onClick,
-    onFavouriteClick}) => {
-  // Get the first image from the array or use a default
+    onFavouriteClick,
+    username
+  }) => {
+
   const defaultImage = "http://localhost:8000/assets/placeholder.png";
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isHovering, setIsHovering] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     let interval;
@@ -29,11 +32,18 @@ const TravelStoryCard = ({
     return () => clearInterval(interval);
   }, [isHovering, imageUrls]);
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const currentImage = imageUrls?.[currentImageIndex] || defaultImage;
 
   return (
       <div 
-        className='border rounded-lg overflow-hidden bg-white hover:shadow-slate-200 transition-all ease-in-out relative cursor-pointer'
+        className={`border rounded-lg overflow-hidden bg-white hover:shadow-slate-200 transition-all ease-in-out relative cursor-pointer 
+          transform-gpu transition-transform duration-500 
+          ${mounted ? 'opacity-100 scale-100' : 'opacity-0 scale-90'} 
+          hover:scale-105`}
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => {
           setIsHovering(false);
@@ -73,6 +83,9 @@ const TravelStoryCard = ({
           <div className='flex items-center gap-3'>
             <div className='flex-1'>
               <h6 className='text-sm font-medium'>{title}</h6>
+              {username && (
+                <span className="block text-xs text-slate-500 mb-1">by {username}</span>
+              )}
               <span className='text-xs text-gray-500'>
                 {date ? moment(date).format("DD MMM YYYY"):"-"}
               </span>

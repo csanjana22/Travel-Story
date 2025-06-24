@@ -9,7 +9,8 @@ const travelStorySchema = new Schema({
     createdOn: { type: Date, default: Date.now },
     imageUrls: { type: [String], default: [] },
     visitedDate: { type: Date, required: true },
-    isFavourite: { type: Boolean, default: false }
+    isFavourite: { type: Boolean, default: false },
+    visibility:{type:String,enum:['public','private'],default: 'private'}
 });
 
 module.exports = mongoose.model('TravelStory', travelStorySchema);
