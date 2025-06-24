@@ -1,5 +1,4 @@
 import React,{useState,useEffect} from 'react';
-import Navbar from '../../components/Navbar';
 import {data, useNavigate} from 'react-router-dom';
 import axiosInstance from '../../utils/axiosInstance';
 import {MdAdd} from "react-icons/md";
@@ -11,6 +10,7 @@ import AddEditTravelStory from './AddEditTravelStory'
 import ViewTravelStory from './ViewTravelStory'
 import EmptyCard from '../../components/cards/EmptyCard';
 import FilterInfoTitle from '../../components/cards/FilterInfoTitle';
+import SearchBar from '../../components/Input/SearchBar';
 
 import {ToastContainer,toast} from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -25,7 +25,7 @@ const Home = () => {
   const [userInfo, setUserInfo] = useState(null);
   const[allStories,setAllStories]=useState([]);
 
-  const[searchQuery,setSearchQuery]=useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const[filterType,setFilterType]=useState('');
   const[dateRange,setDateRange]=useState({form:null ,to:null})
 
@@ -38,6 +38,10 @@ const Home = () => {
     isShown:false,
     data:null,
   });
+
+  const handleShowPublicStories = () => {
+    navigate('/');
+  };
 
   //Get userInfo
   const getUserInfo = async()=>{
@@ -91,7 +95,6 @@ const Home = () => {
         isFavourite: !storyData.isFavourite,
       });
       toast.success("Story Updated Successfully");
-      // Optionally refresh from backend here if you want to ensure consistency
       if (filterType==="search" && searchQuery){
         onSearchStory(searchQuery);
       } else if (filterType==="date"){
@@ -101,7 +104,6 @@ const Home = () => {
       }
     } catch (error) {
       toast.error("Failed to update favourite");
-      // Optionally revert UI change if error
       setAllStories(prev =>
         prev.map(story =>
           story._id === storyData._id
@@ -186,31 +188,62 @@ const Home = () => {
 };
   
 
+  // Search effect 
+  useEffect(() => {
+    if (!searchQuery) {
+      getAllTravelStories();
+      return;
+    }
+    setFilterType('search');
+    onSearchStory(searchQuery);
+  }, [searchQuery]);
+
+  // Manual search handler 
+  const handleManualSearch = () => {
+    if (!searchQuery) {
+      getAllTravelStories();
+      setFilterType("");
+      return;
+    }
+    setFilterType('search');
+    onSearchStory(searchQuery);
+  };
+
+  // Manual clear handler 
+  const handleManualClear = () => {
+    setSearchQuery("");
+    setFilterType("");
+    getAllTravelStories();
+  };
+
   useEffect(() => {
     getUserInfo();
     getAllTravelStories();
+    if (!searchQuery) {
+      getAllTravelStories();
+      return;
+    }
+    onSearchStory(searchQuery);
     return () => {
     }
-  },[]);
+  },[searchQuery]);
 
   return (
     <>
-    <Navbar 
-     userInfo={userInfo} 
-     searchQuery={searchQuery} 
-     setSearchQuery={setSearchQuery}
-     onSearchNote={onSearchStory}
-     handleClearSearch={handleClearSearch}
-     getAllTravelStories={getAllTravelStories}
-     />
+    <div className="flex justify-center mt-6 mb-2">
+      <SearchBar
+        value={searchQuery}
+        onChange={e => setSearchQuery(e.target.value)}
+        handleSearch={handleManualSearch}
+        onClearSearch={handleManualClear}
+      />
+    </div>
     <div className='container mx-auto py-10'>
 
       <FilterInfoTitle 
        filterType={filterType}
        filterDates={dateRange}
-       onClear={()=>{
-        resetFilter();
-       }}
+       onClear={handleManualClear}
        />
 
       <div className ='flex gap-7'>

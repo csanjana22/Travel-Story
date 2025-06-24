@@ -1,37 +1,88 @@
-import React from 'react'
-import { BrowserRouter as Router,Routes,Route,Navigate } from 'react-router-dom'
+import React, { useEffect, useState } from 'react'
+import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import './index.css';
 import Login from './pages/Auth/Login';
 import SignUp from './pages/Auth/SignUp';
 import Home from './pages/Home/Home';
+import LandingPage from './pages/LandingPage'
+import Navbar from './components/Navbar';
+import axios from 'axios';
+import ResetPassword from './pages/Auth/ResetPassword';
 
+const AppContent = () => {
+  // Hydrate userInfo from localStorage for instant profile display
+  const [userInfo, setUserInfo] = useState(() => {
+    const saved = localStorage.getItem('userInfo');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const location = useLocation();
+  const navigate = useNavigate();
 
-const App = () => {
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      axios.get('http://localhost:8000/get-user', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      .then(res => {
+        setUserInfo(res.data.user);
+        localStorage.setItem('userInfo', JSON.stringify(res.data.user));
+      })
+      .catch(() => {
+        setUserInfo(null);
+        localStorage.removeItem('userInfo');
+      })
+      .finally(() => setLoading(false));
+    } else {
+      setUserInfo(null);
+      localStorage.removeItem('userInfo');
+      setLoading(false);
+    }
+  }, []);
+
+  const handleShowPublicStories = () => {
+    if (location.pathname !== '/') {
+      navigate('/');
+    }
+  };
+
+ 
+  if (loading) {
+    return (
+      <div className="w-screen h-screen flex items-center justify-center bg-white">
+      </div>
+    );
+  }
+
   return (
-    <div>
-      <Router>
-        <Routes>
-          <Route path="/" exact element={<Root/>}/>
-          <Route path="/dashboard" exact element={<Home/>}/>
-          <Route path="/login" exact element={<Login/>}/>
-          <Route path="/signup" exact element={<SignUp/>}/>
-        </Routes>
-      </Router>
-    </div>
-  )
-}
-
-//Define the root component to handle the initial redirect
-const Root=()=>{
-  //Check if token exists in localStorage
-  const isAuntenticated = !!localStorage.getItem("token");
-  //Redirect to dashboard if authenticated, otherwise to login
-  return isAuntenticated ?(
-    <Navigate to="/dashboard"/>
-  ):(
-    <Navigate to="/login"/>
+    <>
+      <Navbar
+        userInfo={userInfo}
+        showPublicStories={handleShowPublicStories}
+      />
+      <Routes>
+        <Route path="/" exact element={
+          <LandingPage
+            userInfo={userInfo}
+          />
+        }/>
+        <Route path="/dashboard" exact element={
+          <Home/>
+        }/>
+        <Route path="/login" exact element={<Login/>}/>
+        <Route path="/signup" exact element={<SignUp/>}/>
+        <Route path="/reset-password/:token" element={<ResetPassword />} />
+      </Routes>
+    </>
   );
 };
 
+const App = () => (
+  <Router>
+    <AppContent />
+  </Router>
+);
 
-export default App
+export default App;

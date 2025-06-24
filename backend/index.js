@@ -11,6 +11,8 @@ const {authenticateToken} = require('./utilities');
 const {single, array} = require('./multer');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 
 const User = require('./models/user.model');
 const TravelStory = require('./models/travelStory.model');
@@ -147,7 +149,7 @@ app.delete("/delete-images", async(req, res) => {
                         else resolve();
                     });
                 } else {
-                    resolve(); // File doesn't exist, consider it deleted
+                    resolve();
                 }
             });
         });
@@ -165,10 +167,10 @@ app.use('/assets', express.static(path.join(__dirname, 'assets')));
 
 //Add Travel Story
 app.post("/add-travel-story", authenticateToken, async(req, res) => {
-    let { title, story, visitedLocation, imageUrls, visitedDate } = req.body;
+    let { title, story, visitedLocation, imageUrls, visitedDate, visibility } = req.body; // <-- add visibility
     const { userId } = req.user;
     
-    if (!title || !story || !visitedLocation || !visitedDate) {
+    if (!title || !story || !Array.isArray(visitedLocation) || visitedLocation.length===0 || !visitedDate) {
         return res.status(400).json({ error: true, message: "All fields are required" });
     }
 
@@ -177,8 +179,8 @@ app.post("/add-travel-story", authenticateToken, async(req, res) => {
     }
 
     //Convert visitedDate to Date object
-    const parsedVisitedDate = new Date(parseInt(visitedDate));
-
+    const parsedVisitedDate = new Date(Number(visitedDate));
+   console.log(userId,title,story,visitedLocation,imageUrls,visitedDate,visibility)
     try {
         const travelStory = new TravelStory({
             userId,
@@ -187,14 +189,17 @@ app.post("/add-travel-story", authenticateToken, async(req, res) => {
             visitedLocation,
             imageUrls,
             visitedDate: parsedVisitedDate,
+            visibility: visibility || 'private' 
         });
 
         await travelStory.save();
         res.status(201).json({ story: travelStory, error: false, message: "Added successfully" });
     } catch (error) {
+         console.error("Error in /add-travel-story:", error);
         res.status(400).json({ error: true, message: error.message });
     }
 });
+
 
 //Get All Travel Stories
 app.get("/get-all-travel-stories", authenticateToken, async(req,res)=>{
@@ -208,10 +213,22 @@ app.get("/get-all-travel-stories", authenticateToken, async(req,res)=>{
     }
 });
 
+// Get all public travel stories (no authentication required)
+app.get("/public-travel-stories", async (req, res) => {
+    try {
+        const publicStories = await TravelStory.find({ visibility: "public" })
+            .sort({ createdOn: -1 })
+            .populate("userId", "fullName"); // <-- Add this line
+        res.status(200).json({ stories: publicStories, error: false, message: "Public travel stories fetched successfully" });
+    } catch (error) {
+        res.status(500).json({ error: true, message: error.message });
+    }
+});
+
 //Edit Travel Story
 app.put("/edit-story/:id", authenticateToken, async(req, res) => {
     const { id } = req.params;
-    const { title, story, visitedLocation, visitedDate, imageUrls } = req.body;
+    const { title, story, visitedLocation, visitedDate, imageUrls, visibility } = req.body; // <-- add visibility
     const { userId } = req.user;
 
     if (!title || !story || !visitedLocation || !visitedDate) {
@@ -231,7 +248,7 @@ app.put("/edit-story/:id", authenticateToken, async(req, res) => {
         
         const placeholderImgUrl = `http://localhost:8000/assets/placeholder.png`;
         
-        // Delete old images that are not in the new imageUrls array
+        
         const oldImages = travelStory.imageUrls.filter(url => !imageUrls.includes(url));
         if (oldImages.length > 0) {
             await Promise.all(oldImages.map(imageUrl => {
@@ -252,6 +269,7 @@ app.put("/edit-story/:id", authenticateToken, async(req, res) => {
         travelStory.visitedLocation = visitedLocation;
         travelStory.imageUrls = imageUrls.length > 0 ? imageUrls : [placeholderImgUrl];
         travelStory.visitedDate = parsedVisitedDate;
+        travelStory.visibility = visibility || travelStory.visibility; // <-- update visibility if provided
         await travelStory.save();
         res.status(200).json({ story: travelStory, message: "Travel story updated successfully" });
     } catch (error) {
@@ -259,13 +277,13 @@ app.put("/edit-story/:id", authenticateToken, async(req, res) => {
     }
 });
 
+
 //Delete Travel Story
 app.delete("/delete-story/:id", authenticateToken, async(req, res) => {
     const { id } = req.params;
     const { userId } = req.user;
 
-    try {
-        //Find the travel story by ID and ensure it belongs to the authenticated user
+    try {r
         const travelStory = await TravelStory.findOne({ _id: id, userId: userId });
 
         if (!travelStory) {
@@ -347,10 +365,8 @@ app.get("/travel-stories/filter", authenticateToken, async(req,res)=>{
     }
 
     try{
-        // Convert startDate and endDate from string to Date object
         const start = new Date(parseInt(startDate));
         const end = new Date(parseInt(endDate));
-        //Find travel stories that belong to the authenticated user and fall within the specified date range
         const filteredStories = await TravelStory.find({
             userId:userId,
             visitedDate:{$gte:start, $lte:end}
@@ -362,7 +378,85 @@ app.get("/travel-stories/filter", authenticateToken, async(req,res)=>{
     }
 });
 
+// Toggle favourite for public stories (per user)
+app.post("/public-toggle-favourite/:id", authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const { userId } = req.user;
+    try {
+        const user = await User.findById(userId);
+        if (!user) return res.status(404).json({ error: true, message: "User not found" });
+        const index = user.publicFavourites?.findIndex(favId => favId.toString() === id);
+        if (index >= 0) {
+            // Remove from favourites
+            user.publicFavourites.splice(index, 1);
+        } else {
+            // Add to favourites
+            user.publicFavourites = user.publicFavourites || [];
+            user.publicFavourites.push(id);
+        }
+        await user.save();
+        res.status(200).json({ error: false, message: "Favourite updated" });
+    } catch (error) {
+        res.status(500).json({ error: true, message: error.message });
+    }
+});
 
+// Request password reset
+app.post('/request-password-reset', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: true, message: "Email required" });
+
+  const user = await User.findOne({ email });
+  if (!user) return res.status(200).json({ message: "If this email exists, a reset link will be sent." });
+
+  // Generate token
+  const token = crypto.randomBytes(32).toString('hex');
+  user.resetPasswordToken = token;
+  user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
+  await user.save();
+
+  // Send email (configure your SMTP details)
+  const transporter = nodemailer.createTransport({
+    service: 'Gmail',
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  });
+
+  const resetUrl = `http://localhost:5173/reset-password/${token}`;
+  const mailOptions = {
+    to: user.email,
+    from: process.env.SMTP_USER,
+    subject: 'Password Reset',
+    text: `You requested a password reset. Click here: ${resetUrl}`,
+  };
+
+  await transporter.sendMail(mailOptions);
+
+  res.status(200).json({ message: "If this email exists, a reset link will be sent." });
+});
+
+// Reset password
+app.post('/reset-password/:token', async (req, res) => {
+  const { token } = req.params;
+  const { password } = req.body;
+  if (!password) return res.status(400).json({ error: true, message: "Password required" });
+
+  const user = await User.findOne({
+    resetPasswordToken: token,
+    resetPasswordExpires: { $gt: Date.now() }
+  });
+
+  if (!user) return res.status(400).json({ error: true, message: "Invalid or expired token" });
+
+  user.password = await bcrypt.hash(password, 10);
+  user.resetPasswordToken = undefined;
+  user.resetPasswordExpires = undefined;
+  await user.save();
+
+  res.status(200).json({ message: "Password has been reset successfully" });
+});
 
 app.listen(8000,()=>{
     console.log("Server is running on port 8000");

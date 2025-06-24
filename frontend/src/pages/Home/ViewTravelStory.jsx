@@ -4,8 +4,17 @@ import moment from 'moment/moment'
 import {GrMapLocation} from 'react-icons/gr';
 
 function ViewTravelStory({storyInfo,onClose,onEditClick,onDeleteClick}) {
+    
+  const isLandingPage = !onEditClick && !onDeleteClick;
+
   return (
     <div className='relative'>
+        {isLandingPage && (
+        <button className='absolute top-2 right-2' onClick={onClose}>
+          <span className='text-xl text-slate-400'>&times;</span>
+        </button>
+        )}
+        {!isLandingPage && (
         <div className='flex items-center justify-end'>
             <div>
                 <div className='flex items-center gap-3 bg-cyan-50/50 p-2 rounded-l-lg'>
@@ -23,16 +32,33 @@ function ViewTravelStory({storyInfo,onClose,onEditClick,onDeleteClick}) {
                 </div>
             </div>
         </div>
+        )}
         <div>
             <div className="flex-1 flex flex-col gap-2 py-4">
                 <h1 className="text-2xl text-slate-950">
                     {storyInfo && storyInfo.title}
                 </h1>
-                
+                {/* Username below title, only if present */}
+                {storyInfo?.userId?.fullName && (
+                <span className="block text-sm text-slate-500 mb-1">by {storyInfo.userId.fullName}</span>
+                )}                  
                 <div className="flex items-center justify-between gap-3">
                     <span className="text-xs text-slate-500">
                         {storyInfo && moment(storyInfo.visitedDate).format("Do MMM YYYY")}
                     </span>
+
+                    {/* Place visibility badge above visited location */}
+               {!isLandingPage && storyInfo?.visibility && (
+                <span
+                    className={`inline-block mt-2 mb-1 px-2 py-0.5 rounded text-xs font-semibold capitalize border 
+                    ${storyInfo.visibility === 'public'
+                        ? 'bg-green-50 text-green-700 border-green-200'
+                        : 'bg-gray-100 text-gray-600 border-gray-300'
+                    }`}
+                > {storyInfo.visibility}
+                </span>
+                )}
+
                     <div className="inline-flex items-center gap-2 text-[13px] text-cyan-600 bg-cyan-200/40 rounded px-2 py-1">
                         <GrMapLocation className="text-sm" />
                             {Array.isArray(storyInfo?.visitedLocation)

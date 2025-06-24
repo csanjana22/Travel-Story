@@ -32,7 +32,10 @@ const DateSelector = ({date,setDate}) => {
          captionLayout='dropdown-buttons'
          mode='single'
          selected={date}
-         onSelect={setDate}
+         onSelect={(day) => {
+            setDate(day);
+            setOpenDatePicker(false);
+          }}
          pagedNavigation
         />
       </div>)}

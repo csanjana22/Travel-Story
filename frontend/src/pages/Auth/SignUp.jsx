@@ -41,7 +41,14 @@ const SignUp = () => {
       
       if (response.data && response.data.accessToken){
         localStorage.setItem("token",response.data.accessToken);
+        const userRes = await axiosInstance.get("/get-user", {
+          headers: { Authorization: `Bearer ${response.data.accessToken}` }
+        });
+        if (userRes.data && userRes.data.user) {
+          localStorage.setItem("userInfo", JSON.stringify(userRes.data.user));
+        }
         navigate("/dashboard");
+        window.location.reload();
       }
     }catch(error){
       if(
@@ -57,13 +64,13 @@ const SignUp = () => {
   };
 
   return (
-    <div className="h-screen bg-cyan-50 overflow-hidden relative">
+    <div className="h-[calc(100vh-3.5rem)] bg-cyan-50 overflow-hidden relative">
         
         <div className="login-ui-box right-10 -top-40"/>
         <div className="login-ui-box bg-cyan-200 right-1/2 -bottom-40"/>
 
-        <div className="h-screen flex items-center justify-center mx-auto px-20">
-          <div className="w-2/4 h-[90vh] bg-signup-bg-img bg-cover bg-center rounded-lg shadow-lg flex items-end p-10 z-50 ml-10">
+        <div className="h-full flex items-center justify-center mx-auto px-20">
+          <div className="w-2/4 h-[80vh] bg-signup-bg-img bg-cover bg-center rounded-lg shadow-lg flex items-end p-10 z-50 ml-10">
             <div>
             <h4 className="text-white text-5xl font-semibold leading-[58px]">Join the <br/> Adventure</h4>
             <p className="text-white text-[15px] leading-6 pr-7 mt-4">
@@ -72,7 +79,7 @@ const SignUp = () => {
             </div>
           </div>
 
-          <div className="w-2/4 h-[75vh] bg-white rounded-r-lg shadow-lg shadow-cyan-200/20 p-16 mr-10 z-50">
+          <div className="w-2/4 h-[70vh] bg-white rounded-r-lg shadow-lg shadow-cyan-200/20 p-16 mr-10 z-50">
             <form onSubmit={handleSignUp}>
               <h4 className="text-2xl font-semibold mb-7">SignUp</h4>
 

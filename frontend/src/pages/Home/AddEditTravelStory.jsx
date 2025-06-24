@@ -21,7 +21,10 @@ const AddEditTravelStory = ({
     const [storyImages, setStoryImages] = useState(storyInfo?.imageUrls || []);
     const [story, setStory] = useState(storyInfo?.story || "");
     const [visitedLocation, setVisitedLocation] = useState(storyInfo?.visitedLocation || []);
-    const [visitedDate, setVisitedDate] = useState(storyInfo?.visitedDate || null)
+    const [visitedDate, setVisitedDate] = useState(
+        storyInfo?.visitedDate ? new Date(storyInfo.visitedDate) : null
+        );
+    const [visibility, setVisibility] = useState(storyInfo?.visibility || "private"); 
     const [error, setError] = useState("")
 
     const addNewTravelStory = async () => {
@@ -40,7 +43,7 @@ const AddEditTravelStory = ({
             if (imageUrls.length === 0) {
                 imageUrls = [DEFAULT_IMAGE_URL];
             }
-
+            console.log(title,story,imageUrls,visitedLocation,visitedDate,visibility)
             const response = await axiosInstance.post("/add-travel-story", {
                 title,
                 story,
@@ -49,6 +52,7 @@ const AddEditTravelStory = ({
                 visitedDate: visitedDate ?
                     moment(visitedDate).valueOf()
                     : moment().valueOf(),
+                visibility,
             });
 
             if (response.data && response.data.story) {
@@ -89,6 +93,7 @@ const AddEditTravelStory = ({
                 visitedDate: visitedDate
                     ? moment(visitedDate).valueOf()
                     : moment().valueOf(),
+                visibility 
             };
 
             const response = await axiosInstance.put(
@@ -209,6 +214,18 @@ const AddEditTravelStory = ({
                     <div className='pt-3'>
                         <label className='input-label'>VISITED LOCATIONS</label>
                         <TagInput tags={visitedLocation} setTags={setVisitedLocation} />
+                    </div>
+                
+                    <div className='pt-3'>
+                        <label className='input-label'>VISIBILITY</label><br/>
+                        <select
+                            className='p-1 rounded border border-slate-300 text-sm mt-3 text-slate-550'
+                            value={visibility}
+                            onChange={e => setVisibility(e.target.value)}
+                        >
+                            <option value="public">Public</option>
+                            <option value="private">Private</option>
+                        </select>
                     </div>
                 </div>
             </div>

@@ -1,11 +1,19 @@
 import React from 'react';
 import { getInitials } from '../../utils/helper';
+import { useNavigate } from 'react-router-dom';
 
 const ProfileInfo = ({userInfo,onLogout}) => {
+    const navigate = useNavigate();
+
     if (!userInfo) return null;
+
+    const handleUserStories = () => {
+      navigate('/dashboard');
+    };
   return (
     userInfo && (<div className="flex items-center gap-3">
-        <div className="w-12 h-12 flex items-center justify-center rounded-full text-slate-950 font-medium bg-slate-100">
+        <div className="w-12 h-12 flex items-center justify-center rounded-full text-slate-950 font-medium bg-slate-100 cursor-pointer"
+        onClick={handleUserStories}>
           {getInitials(userInfo ? userInfo.fullName:"" )}  
         </div>
         <div>
