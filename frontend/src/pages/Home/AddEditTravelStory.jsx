@@ -20,7 +20,7 @@ const AddEditTravelStory = ({
     const [title, setTitle] = useState(storyInfo?.title || "");
     const [storyImages, setStoryImages] = useState(storyInfo?.imageUrls || []);
     const [story, setStory] = useState(storyInfo?.story || "");
-    const [visitedLocation, setVisitedLocation] = useState(storyInfo?.visitedLocation || []);
+    const [visitedLocation, setVisitedLocation] = useState(storyInfo?.visitedLocation || {name:""});
     const [visitedDate, setVisitedDate] = useState(
         storyInfo?.visitedDate ? new Date(storyInfo.visitedDate) : null
         );
@@ -121,7 +121,7 @@ const AddEditTravelStory = ({
             setError("Please Enter the story")
             return;
         }
-        if (!visitedLocation || visitedLocation.length === 0) {
+        if (!visitedLocation || !visitedLocation.name) {
             setError("Please Enter the location")
             return;
         }
@@ -212,8 +212,8 @@ const AddEditTravelStory = ({
                     </div>
 
                     <div className='pt-3'>
-                        <label className='input-label'>VISITED LOCATIONS</label>
-                        <TagInput tags={visitedLocation} setTags={setVisitedLocation} />
+                        <label className='input-label'>VISITED LOCATION</label>
+                        <TagInput location={visitedLocation} setLocation={setVisitedLocation} />
                     </div>
                 
                     <div className='pt-3'>

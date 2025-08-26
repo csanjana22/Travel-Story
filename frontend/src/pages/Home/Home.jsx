@@ -11,6 +11,7 @@ import ViewTravelStory from './ViewTravelStory'
 import EmptyCard from '../../components/cards/EmptyCard';
 import FilterInfoTitle from '../../components/cards/FilterInfoTitle';
 import SearchBar from '../../components/Input/SearchBar';
+import StoriesMap from '../../components/geotaging'
 
 import {ToastContainer,toast} from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -192,6 +193,7 @@ const Home = () => {
   useEffect(() => {
     if (!searchQuery) {
       getAllTravelStories();
+      setFilterType("");
       return;
     }
     setFilterType('search');
@@ -219,14 +221,7 @@ const Home = () => {
   useEffect(() => {
     getUserInfo();
     getAllTravelStories();
-    if (!searchQuery) {
-      getAllTravelStories();
-      return;
-    }
-    onSearchStory(searchQuery);
-    return () => {
-    }
-  },[searchQuery]);
+  }, []);
 
   return (
     <>
@@ -295,6 +290,12 @@ const Home = () => {
       </div>
     </div>
 
+    {/* Geotag Map below all stories */}
+    <div className='container mx-auto'>
+      <StoriesMap stories={allStories} onStoryClick={handleViewStory} />
+    </div>
+    
+
     {/*Add & Edit Travel Story Modal*/}
     <Modal 
     isOpen={openAddEditModal.isShown}
@@ -334,7 +335,7 @@ const Home = () => {
     </Modal> 
 
     <button
-      className='w-16 h-16 flex items-center justify-center rounded-full bg-primary hover:bg-cyan-400 fixed right-10 bottom-10 '
+      className='w-16 h-16 flex items-center justify-center rounded-full bg-primary hover:bg-cyan-400 fixed right-10 bottom-10 z-[9999]'
       onClick={()=>{
         setOpenAddEditModal({isShown:true, type:"add", data:null});
       }}
@@ -343,6 +344,11 @@ const Home = () => {
     </button>
 
     <ToastContainer/>
+    <footer className="w-full bg-gray-100 text-center py-6 mt-10 border-t border-gray-200">
+        <p className="text-gray-600 text-sm">
+          &copy; {new Date().getFullYear()} Travel Story App. Made with <span className="text-red-400">♥</span> by Sanjana.
+        </p>
+      </footer>
     </>
   )
 }

@@ -61,9 +61,7 @@ function ViewTravelStory({storyInfo,onClose,onEditClick,onDeleteClick}) {
 
                     <div className="inline-flex items-center gap-2 text-[13px] text-cyan-600 bg-cyan-200/40 rounded px-2 py-1">
                         <GrMapLocation className="text-sm" />
-                            {Array.isArray(storyInfo?.visitedLocation)
-                                ? storyInfo.visitedLocation.join(', ')
-                                : ''}
+                        {storyInfo?.visitedLocation?.name || 'Location not specified'}
                     </div>
                 </div>
             </div>        

@@ -8,6 +8,7 @@ const express = require('express');
 const cors = require('cors');
 
 const {authenticateToken} = require('./utilities');
+const {geocodeLocation} = require('./geocoding');
 const {single, array} = require('./multer');
 const fs = require('fs');
 const path = require('path');
@@ -170,13 +171,25 @@ app.post("/add-travel-story", authenticateToken, async(req, res) => {
     let { title, story, visitedLocation, imageUrls, visitedDate, visibility } = req.body; // <-- add visibility
     const { userId } = req.user;
     
-    if (!title || !story || !Array.isArray(visitedLocation) || visitedLocation.length===0 || !visitedDate) {
+    if (!title || !story || !visitedLocation || !visitedLocation.name|| !visitedDate) {
         return res.status(400).json({ error: true, message: "All fields are required" });
     }
 
     if (!imageUrls || !Array.isArray(imageUrls) || imageUrls.length === 0) {
         imageUrls = [`http://localhost:8000/assets/placeholder.png`];
     }
+
+
+    // Geocode each visitedLocation item if it has a name but no lat/lng
+    if (visitedLocation.name && (!visitedLocation.lat || !visitedLocation.lng)) {
+        const coords = await geocodeLocation(visitedLocation.name);
+        if (coords) {
+            visitedLocation.lat = coords.lat;
+            visitedLocation.lng = coords.lng;
+        }
+    }
+
+
 
     //Convert visitedDate to Date object
     const parsedVisitedDate = new Date(Number(visitedDate));
@@ -218,7 +231,7 @@ app.get("/public-travel-stories", async (req, res) => {
     try {
         const publicStories = await TravelStory.find({ visibility: "public" })
             .sort({ createdOn: -1 })
-            .populate("userId", "fullName"); // <-- Add this line
+            .populate("userId", "fullName"); 
         res.status(200).json({ stories: publicStories, error: false, message: "Public travel stories fetched successfully" });
     } catch (error) {
         res.status(500).json({ error: true, message: error.message });
@@ -231,7 +244,7 @@ app.put("/edit-story/:id", authenticateToken, async(req, res) => {
     const { title, story, visitedLocation, visitedDate, imageUrls, visibility } = req.body; // <-- add visibility
     const { userId } = req.user;
 
-    if (!title || !story || !visitedLocation || !visitedDate) {
+    if (!title || !story || !visitedLocation || !visitedLocation.name || !visitedDate) {
         return res.status(400).json({ error: true, message: "All fields are required" });
     }
 
@@ -263,13 +276,27 @@ app.put("/edit-story/:id", authenticateToken, async(req, res) => {
                 });
             }));
         }
-        
+
+        let updatedVisitedLocation = { ...visitedLocation };
+
+        if (visitedLocation.name)  {
+        const coords = await geocodeLocation(visitedLocation.name);
+        if (coords) {
+            updatedVisitedLocation = {
+            ...visitedLocation,
+            lat: coords.lat,
+            lng: coords.lng,
+            };
+        }
+        }
+                
         travelStory.title = title;
         travelStory.story = story;      
-        travelStory.visitedLocation = visitedLocation;
+        travelStory.visitedLocation = updatedVisitedLocation;
+        travelStory.markModified('visitedLocation');
         travelStory.imageUrls = imageUrls.length > 0 ? imageUrls : [placeholderImgUrl];
         travelStory.visitedDate = parsedVisitedDate;
-        travelStory.visibility = visibility || travelStory.visibility; // <-- update visibility if provided
+        travelStory.visibility = visibility || travelStory.visibility; 
         await travelStory.save();
         res.status(200).json({ story: travelStory, message: "Travel story updated successfully" });
     } catch (error) {
@@ -283,7 +310,7 @@ app.delete("/delete-story/:id", authenticateToken, async(req, res) => {
     const { id } = req.params;
     const { userId } = req.user;
 
-    try {r
+    try {
         const travelStory = await TravelStory.findOne({ _id: id, userId: userId });
 
         if (!travelStory) {
@@ -346,7 +373,7 @@ app.get("/search", authenticateToken, async(req,res)=>{
             $or:[
                 {title:{$regex:query, $options:"i"}},
                 {story:{$regex:query, $options:"i"}},
-                {visitedLocation:{$regex:query, $options:"i"}}
+                {"visitedLocation.name":{$regex:query, $options:"i"}}
             ],
         }).sort({isFavourite:-1});
         res.status(200).json({stories:searchResults});
@@ -412,7 +439,7 @@ app.post('/request-password-reset', async (req, res) => {
   // Generate token
   const token = crypto.randomBytes(32).toString('hex');
   user.resetPasswordToken = token;
-  user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
+  user.resetPasswordExpires = Date.now() + 3600000; 
   await user.save();
 
   // Send email (configure your SMTP details)

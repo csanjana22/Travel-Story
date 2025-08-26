@@ -28,12 +28,12 @@ const FilterInfoTitle = ({ filterType, filterDates,onClear }) => {
         <div className="mb-5">
         {filterType === "search" ? (
             <h3 className="text-lg font-medium">Search Results</h3>
-        ) : (
+        ) : filterType === "date" && filterDates?.from && filterDates?.to ? (
             <div className="flex items-center gap-2">
             <h3 className="text-lg font-medium">Travel Stories from</h3>
             <DateRangeChip date={filterDates} />
             </div>
-        )}
+        ) : null}
         </div>
     )
     );
