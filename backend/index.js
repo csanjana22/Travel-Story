@@ -430,38 +430,57 @@ app.post("/public-toggle-favourite/:id", authenticateToken, async (req, res) => 
 
 // Request password reset
 app.post('/request-password-reset', async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ error: true, message: "Email required" });
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: true, message: "Email required" });
 
-  const user = await User.findOne({ email });
-  if (!user) return res.status(200).json({ message: "If this email exists, a reset link will be sent." });
+    const user = await User.findOne({ email });
+    if (!user) return res.status(200).json({ message: "If this email exists, a reset link will be sent." });
 
-  // Generate token
-  const token = crypto.randomBytes(32).toString('hex');
-  user.resetPasswordToken = token;
-  user.resetPasswordExpires = Date.now() + 3600000; 
-  await user.save();
+    // Generate token
+    const token = crypto.randomBytes(32).toString('hex');
+    user.resetPasswordToken = token;
+    user.resetPasswordExpires = Date.now() + 3600000;
+    await user.save();
 
-  // Send email (configure your SMTP details)
-  const transporter = nodemailer.createTransport({
-    service: 'Gmail',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
+    // Check SMTP config
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      console.error('SMTP credentials missing: check SMTP_USER and SMTP_PASS in .env');
+      return res.status(500).json({ error: true, message: 'Email service not configured' });
+    }
 
-  const resetUrl = `http://localhost:5173/reset-password/${token}`;
-  const mailOptions = {
-    to: user.email,
-    from: process.env.SMTP_USER,
-    subject: 'Password Reset',
-    text: `You requested a password reset. Click here: ${resetUrl}`,
-  };
+    // Send email (configure your SMTP details)
+    const transporter = nodemailer.createTransport({
+      service: 'Gmail',
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
 
-  await transporter.sendMail(mailOptions);
+    // Verify transporter connection before sending
+    try {
+      await transporter.verify();
+    } catch (verifyErr) {
+      console.error('Error verifying transporter:', verifyErr);
+      return res.status(500).json({ error: true, message: 'Email service configuration problem' });
+    }
 
-  res.status(200).json({ message: "If this email exists, a reset link will be sent." });
+    const resetUrl = `http://localhost:5173/reset-password/${token}`;
+    const mailOptions = {
+      to: user.email,
+      from: process.env.SMTP_USER,
+      subject: 'Password Reset',
+      text: `You requested a password reset. Click here: ${resetUrl}`,
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    res.status(200).json({ message: "If this email exists, a reset link will be sent." });
+  } catch (err) {
+    console.error('Error in /request-password-reset:', err);
+    res.status(500).json({ error: true, message: 'Internal server error' });
+  }
 });
 
 // Reset password

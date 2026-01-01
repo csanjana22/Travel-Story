@@ -53,33 +53,48 @@ const LandingPage = ({ userInfo }) => {
 
   // Search handler for public stories
   useEffect(() => {
-    if (!searchQuery) {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) {
       fetchPublicStories();
       return;
     }
+
     setLoading(true);
-    axios.get("http://localhost:8000/public-travel-stories")
-      .then(res => {
-        let allStories = res.data.stories || [];
-        const filtered = allStories.filter(
-          (story) =>
-            story.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            story.story.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (story.visitedLocation &&
-              story.visitedLocation.join(", ").toLowerCase().includes(searchQuery.toLowerCase()))
-        );
-        // Explicitly set isFavourite false if not logged in
-        if (!(userInfo && userInfo.publicFavourites)) {
-          setStories(filtered.map(story => ({ ...story, isFavourite: false })));
-        } else {
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      axios.get("http://localhost:8000/public-travel-stories", { signal: controller.signal })
+        .then(res => {
+          const allStories = res.data.stories || [];
+          const filtered = allStories.filter(story => {
+            const title = (story.title || "").toLowerCase();
+            const body = (story.story || "").toLowerCase();
+            let visited = "";
+            if (Array.isArray(story.visitedLocation)) {
+              visited = story.visitedLocation.join(", ").toLowerCase();
+            } else if (typeof story.visitedLocation === 'string') {
+              visited = story.visitedLocation.toLowerCase();
+            }
+            return title.includes(q) || body.includes(q) || visited.includes(q);
+          });
+
           setStories(filtered.map(story => ({
             ...story,
-            isFavourite: userInfo.publicFavourites.includes(story._id)
+            isFavourite: !!(userInfo?.publicFavourites?.includes(story._id))
           })));
-        }
-      })
-      .finally(() => setLoading(false));
-  }, [searchQuery]);
+        })
+        .catch(err => {
+          if (err.name !== 'CanceledError') {
+            console.error("Search failed:", err);
+          }
+        })
+        .finally(() => setLoading(false));
+    }, 300); // debounce
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [searchQuery, userInfo]);
 
     
      useEffect(() => {
