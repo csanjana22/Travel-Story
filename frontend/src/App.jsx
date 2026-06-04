@@ -6,8 +6,11 @@ import SignUp from './pages/Auth/SignUp';
 import Home from './pages/Home/Home';
 import LandingPage from './pages/LandingPage'
 import Navbar from './components/Navbar';
+import AIPlanner from './pages/Ai-planner/AIPlanner';
+import Itineraries from './pages/Ai-planner/Itineraries'
 import axios from 'axios';
 import ResetPassword from './pages/Auth/ResetPassword';
+import { BASE_URL } from './utils/constants';
 
 const AppContent = () => {
   // Hydrate userInfo from localStorage for instant profile display
@@ -23,7 +26,7 @@ const AppContent = () => {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token) {
-      axios.get('http://localhost:8000/get-user', {
+      axios.get(`${BASE_URL}/get-user`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       .then(res => {
@@ -74,6 +77,8 @@ const AppContent = () => {
         <Route path="/login" exact element={<Login/>}/>
         <Route path="/signup" exact element={<SignUp/>}/>
         <Route path="/reset-password/:token" element={<ResetPassword />} />
+        <Route path="/ai-planner" exact element={<AIPlanner />}/>
+        <Route path="/itineraries" exact element={<Itineraries />}/>
       </Routes>
     </>
   );

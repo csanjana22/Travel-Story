@@ -6,23 +6,65 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const express = require('express');
 const cors = require('cors');
+const axios = require('axios')
 
 const {authenticateToken} = require('./utilities');
 const {geocodeLocation} = require('./geocoding');
 const {single, array} = require('./multer');
-const fs = require('fs');
+const { uploadFiles, deleteByUrls } = require('./cloudinary');
 const path = require('path');
+
+const BASE_URL = process.env.BASE_URL || 'http://localhost:8000';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+const PLACEHOLDER_IMAGE_URL = `${BASE_URL}/assets/placeholder.png`;
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 
 const User = require('./models/user.model');
 const TravelStory = require('./models/travelStory.model');
-const { error } = require('console');
-mongoose.connect(config.connectionString);
+const Itinerary = require('./models/itinerary.model')
+const PORT = process.env.PORT || 8000;
+
+if (!config.connectionString) {
+    console.error('MONGO_URI is required. Add it to backend/.env (see .env.example).');
+    process.exit(1);
+}
+
+mongoose.connect(config.connectionString).catch((err) => {
+    console.error('MongoDB connection failed:', err.message);
+    process.exit(1);
+});
+
+const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8001";
+const aiApi = axios.create({
+    baseURL: AI_SERVICE_URL,
+    timeout: 300000,
+});
+
+async function checkAiServiceHealth() {
+    try {
+        const res = await axios.get(`${AI_SERVICE_URL}/health`, { timeout: 5000 });
+        if (res.data?.ok && res.data.google_api_key_configured === true) {
+            console.log(`AI service reachable at ${AI_SERVICE_URL}`);
+        } else if (res.data?.ok) {
+            console.warn(
+                `AI_SERVICE_URL may be wrong (got backend /health, not AI service). Use http://localhost:8001 — current: ${AI_SERVICE_URL}`
+            );
+        }
+    } catch (err) {
+        console.warn(`AI service not reachable at ${AI_SERVICE_URL} — trip planner will fail until it is running. (${err.message})`);
+    }
+}
+checkAiServiceHealth();
 
 const app = express();
-app.use(express.json());
-app.use(cors({origin:"*"}));
+const corsOrigin = process.env.FRONTEND_URL || '*';
+app.use(cors({ origin: corsOrigin }));
+app.use(express.json({ limit: '1mb' }));
+
+app.get('/health', (_req, res) => {
+    res.status(200).json({ ok: true });
+});
 
 //Create account
 app.post("/create-account", async(req,res)=>{
@@ -118,11 +160,15 @@ app.post("/image-upload", array, async(req, res) => {
         if (!req.files || req.files.length === 0) {
             return res.status(400).json({ error: true, message: "No images uploaded" });
         }
-        
-        // Handle both single and multiple file uploads
+
+        if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+            return res.status(500).json({ error: true, message: "Cloudinary is not configured" });
+        }
+
         const files = Array.isArray(req.files) ? req.files : [req.files];
-        const imageUrls = files.map(file => `http://localhost:8000/uploads/${file.filename}`);
-        
+        const results = await uploadFiles(files);
+        const imageUrls = results.map((result) => result.secure_url);
+
         res.status(200).json({ imageUrls });
     } catch (error) {
         console.error('Image upload error:', error);
@@ -130,7 +176,7 @@ app.post("/image-upload", array, async(req, res) => {
     }
 });
 
-//Delete images from uploads directory
+//Delete images from Cloudinary
 app.delete("/delete-images", async(req, res) => {
     const { imageUrls } = req.body;
 
@@ -139,32 +185,16 @@ app.delete("/delete-images", async(req, res) => {
     }
 
     try {
-        const deletePromises = imageUrls.map(imageUrl => {
-            const filename = path.basename(imageUrl);
-            const filePath = path.join(__dirname, 'uploads', filename);
-            
-            return new Promise((resolve, reject) => {
-                if (fs.existsSync(filePath)) {
-                    fs.unlink(filePath, (err) => {
-                        if (err) reject(err);
-                        else resolve();
-                    });
-                } else {
-                    resolve();
-                }
-            });
-        });
-
-        await Promise.all(deletePromises);
+        await deleteByUrls(imageUrls);
         return res.status(200).json({ message: "Images deleted successfully" });
     } catch (error) {
         return res.status(500).json({ error: true, message: error.message });
     }
 });
 
-// Serve static files from the uploads assets directory
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Serve static assets (placeholder) and legacy local uploads
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 //Add Travel Story
 app.post("/add-travel-story", authenticateToken, async(req, res) => {
@@ -176,7 +206,7 @@ app.post("/add-travel-story", authenticateToken, async(req, res) => {
     }
 
     if (!imageUrls || !Array.isArray(imageUrls) || imageUrls.length === 0) {
-        imageUrls = [`http://localhost:8000/assets/placeholder.png`];
+        imageUrls = [PLACEHOLDER_IMAGE_URL];
     }
 
 
@@ -259,22 +289,9 @@ app.put("/edit-story/:id", authenticateToken, async(req, res) => {
             return res.status(404).json({ error: true, message: "Travel story not found" });
         }
         
-        const placeholderImgUrl = `http://localhost:8000/assets/placeholder.png`;
-        
-        
         const oldImages = travelStory.imageUrls.filter(url => !imageUrls.includes(url));
         if (oldImages.length > 0) {
-            await Promise.all(oldImages.map(imageUrl => {
-                const filename = path.basename(imageUrl);
-                const filePath = path.join(__dirname, 'uploads', filename);
-                return new Promise((resolve) => {
-                    if (fs.existsSync(filePath)) {
-                        fs.unlink(filePath, () => resolve());
-                    } else {
-                        resolve();
-                    }
-                });
-            }));
+            await deleteByUrls(oldImages);
         }
 
         let updatedVisitedLocation = { ...visitedLocation };
@@ -294,7 +311,7 @@ app.put("/edit-story/:id", authenticateToken, async(req, res) => {
         travelStory.story = story;      
         travelStory.visitedLocation = updatedVisitedLocation;
         travelStory.markModified('visitedLocation');
-        travelStory.imageUrls = imageUrls.length > 0 ? imageUrls : [placeholderImgUrl];
+        travelStory.imageUrls = imageUrls.length > 0 ? imageUrls : [PLACEHOLDER_IMAGE_URL];
         travelStory.visitedDate = parsedVisitedDate;
         travelStory.visibility = visibility || travelStory.visibility; 
         await travelStory.save();
@@ -320,18 +337,7 @@ app.delete("/delete-story/:id", authenticateToken, async(req, res) => {
         // Delete the travel story
         await TravelStory.deleteOne({ _id: id, userId: userId });   
 
-        // Delete all associated images
-        await Promise.all(travelStory.imageUrls.map(imageUrl => {
-            const filename = path.basename(imageUrl);
-            const filePath = path.join(__dirname, 'uploads', filename);
-            return new Promise((resolve) => {
-                if (fs.existsSync(filePath)) {
-                    fs.unlink(filePath, () => resolve());
-                } else {
-                    resolve();
-                }
-            });
-        }));
+        await deleteByUrls(travelStory.imageUrls);
 
         return res.status(200).json({ error: false, message: "Travel story deleted successfully" });
     } catch (error) {
@@ -466,7 +472,7 @@ app.post('/request-password-reset', async (req, res) => {
       return res.status(500).json({ error: true, message: 'Email service configuration problem' });
     }
 
-    const resetUrl = `http://localhost:5173/reset-password/${token}`;
+    const resetUrl = `${FRONTEND_URL}/reset-password/${token}`;
     const mailOptions = {
       to: user.email,
       from: process.env.SMTP_USER,
@@ -504,7 +510,218 @@ app.post('/reset-password/:token', async (req, res) => {
   res.status(200).json({ message: "Password has been reset successfully" });
 });
 
-app.listen(8000,()=>{
-    console.log("Server is running on port 8000");
+
+//Generate New Itinerary
+app.post('/generate-itinerary',authenticateToken,async(req,res)=>{
+    const {userId} = req.user;
+    const { destination,days,budget,interests } = req.body;
+
+    if (!destination || !days || !budget){
+        return res.status(400).json({error:true , message:"Destination,days,budget are required"});
+    }
+
+    try{
+        const aiResponse = await aiApi.post("/get-plan",{
+            destination,days,budget,interests : interests || ""
+        });
+        const itineraryData = aiResponse.data
+        const newItinerary = new Itinerary({
+            userId,
+            destination,
+            days,
+            budget,
+            interests,
+            itineraryData
+        });
+        await newItinerary.save()
+        res.status(201).json({error:false,itinerary:newItinerary,message:"Plan generated successfully"});
+    } catch (error){
+        console.error("AI Service Error:", error.response?.data || error.message);
+        const detail = error.response?.data?.detail;
+        const message = typeof detail === 'string'
+            ? detail
+            : Array.isArray(detail)
+                ? detail.map((d) => d.msg || d).join(', ')
+                : error.code === 'ECONNREFUSED'
+                    ? `Cannot reach AI service at ${AI_SERVICE_URL}. Start it: cd ai-service && python -m uvicorn main:app --host 0.0.0.0 --port 8001`
+                    : "AI Service is offline or returned an error";
+        res.status(500).json({ error: true, message });
+    }
+});
+
+//Revise Existing Itinerary
+app.post('/revise-itinerary/:id',authenticateToken,async(req,res)=>{
+    const { id } = req.params;
+    const {userId} = req.user;
+    const { feedback } = req.body;
+
+    try{
+        const existingItinerary = await Itinerary.findOne({_id:id , userId});
+        if (!existingItinerary) return res.status(404).json({ error: true, message: "Itinerary not found" });
+
+        const aiResponse = await aiApi.post("/revise-plan",{
+            itinerary:existingItinerary.itineraryData,
+            feedback,
+            history: existingItinerary.feedbackHistory,
+            summary:existingItinerary.summary
+        });
+        
+        existingItinerary.itineraryData = aiResponse.data.itinerary
+        existingItinerary.feedbackHistory =  aiResponse.data.new_buffer;
+        existingItinerary.summary = aiResponse.data.new_summary
+
+        await existingItinerary.save()
+        res.status(200).json({error:false,itinerary:existingItinerary,message:"Plan revised successfully"});
+    } catch (error){
+        console.error("AI Revise Error:", error.response?.data || error.message);
+        const detail = error.response?.data?.detail;
+        const message = typeof detail === 'string' ? detail : error.message;
+        res.status(500).json({ error: true, message });
+    }
+});
+
+//Get All User Itineraries
+app.get("/get-all-itineraries", authenticateToken, async(req,res)=>{
+    const {userId} = req.user;
+
+    try{
+        const itineraries = await Itinerary.find({userId:userId}).sort({createdAt:-1});
+        res.status(200).json({itineraries, error:false, message:"Itineraries fetched successfully"});
+    } catch(error){
+        res.status(500).json({error:true, message:error.message});
+    }
+});
+
+
+//Delete Itinerary
+app.delete("/delete-itinerary/:id", authenticateToken, async(req, res) => {
+    const { id } = req.params;
+    const { userId } = req.user;
+
+    try {
+        const deleted = await Itinerary.findOneAndDelete({ _id: id, userId: userId });
+
+        if (!deleted) return res.status(404).json({ error: true, message: "Itinerary not found" });
+
+        return res.status(200).json({ error: false, message: "Itinerary deleted successfully" });
+    } catch (error) {
+        return res.status(500).json({ error: true, message: error.message });
+    }
+});
+
+app.get("/get-itinerary/:id", authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const { userId } = req.user;
+
+    try {
+        const itinerary = await Itinerary.findOne({ _id: id, userId });
+        if (!itinerary) return res.status(404).json({ error: true, message: "Itinerary not found" });
+        
+        res.status(200).json({ error: false, itinerary });
+    } catch (error) {
+        res.status(500).json({ error: true, message: error.message });
+    }
+});
+
+// app.put("/update-itinerary-info/:id", authenticateToken, async (req, res) => {
+//     const { id } = req.params;
+//     const { destination, interests } = req.body;
+//     const { userId } = req.user;
+
+//     try {
+//         const updated = await Itinerary.findOneAndUpdate(
+//             { _id: id, userId },
+//             { destination, interests },
+//             { new: true }
+//         );
+//         if (!updated) return res.status(404).json({ error: true, message: "Itinerary not found" });
+        
+//         res.status(200).json({ error: false, itinerary: updated, message: "Details updated" });
+//     } catch (error) {
+//         res.status(500).json({ error: true, message: error.message });
+//     }
+// });
+
+// app.get("/get-itinerary/:id", authenticateToken, async (req, res) => {
+//     const { id } = req.params;
+//     const { userId } = req.user;
+
+//     try {
+//         const itinerary = await Itinerary.findOne({ _id: id, userId });
+//         if (!itinerary) return res.status(404).json({ error: true, message: "Itinerary not found" });
+        
+//         res.status(200).json({ error: false, itinerary });
+//     } catch (error) {
+//         res.status(500).json({ error: true, message: error.message });
+//     }
+// });
+
+// app.post("/clear-itinerary-history/:id", authenticateToken, async (req, res) => {
+//     const { id } = req.params;
+//     const { userId } = req.user;
+
+//     try {
+//         const itinerary = await Itinerary.findOneAndUpdate(
+//             { _id: id, userId },
+//             { feedbackHistory: [] },
+//             { new: true }
+//         );
+//         res.status(200).json({ error: false, message: "History cleared", itinerary });
+//     } catch (error) {
+//         res.status(500).json({ error: true, message: error.message });
+//     }
+// });
+
+
+// Search Transportations
+// Query params: origin (required), destination (required), date (optional, YYYY-MM-DD), mode (optional: flight/train/bus/car/ferry)
+app.get('/search-transportations', async (req, res) => {
+    const { origin, destination, date, mode } = req.query;
+
+    if (!origin || !destination) return res.status(400).json({ error: true, message: 'Origin and destination are required' });
+
+    try {
+        // If an external transport API is configured via env vars, proxy the request
+        if (process.env.TRANSPORT_API_URL) {
+            const params = { origin, destination };
+            if (date) params.date = date;
+            if (mode) params.mode = mode;
+
+            const headers = {};
+            if (process.env.TRANSPORT_API_KEY) headers['Authorization'] = `Bearer ${process.env.TRANSPORT_API_KEY}`;
+
+            const resp = await axios.get(process.env.TRANSPORT_API_URL, { params, headers, timeout: 15000 });
+            const raw = resp.data || {};
+
+            // Normalize to { id, provider, price, duration, departure, arrival, mode }
+            const results = (raw.results || raw.data || []).map((r, i) => ({
+                id: r.id || `${Date.now()}-${i}`,
+                provider: r.provider || r.name || r.carrier || 'Provider',
+                price: r.price || r.cost || null,
+                duration: r.duration || r.travel_time || '',
+                departure: r.departure || r.departure_time || null,
+                arrival: r.arrival || r.arrival_time || null,
+                mode: r.mode || mode || ''
+            }));
+
+            return res.status(200).json({ error: false, results });
+        }
+
+        // No external API configured — return a small set of mocked results
+        const mock = [
+            { id: 'mock1', provider: 'FastAir', price: 4500, duration: '2h 15m', departure: '09:00', arrival: '11:15', mode: 'flight' },
+            { id: 'mock2', provider: 'NightBus', price: 900, duration: '10h', departure: '22:00', arrival: '08:00', mode: 'bus' }
+        ];
+
+        return res.status(200).json({ error: false, results: mock });
+
+    } catch (err) {
+        console.error('Transport search error:', err.message || err);
+        return res.status(500).json({ error: true, message: 'Failed to search transportations' });
+    }
+});
+
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
 });
 module.exports = app;

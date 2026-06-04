@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { BASE_URL } from '../../utils/constants';
 
 const ResetPassword = () => {
   const { token } = useParams();
@@ -14,7 +15,7 @@ const ResetPassword = () => {
     setLoading(true);
     setMsg('');
     try {
-      const res = await axios.post(`http://localhost:8000/reset-password/${token}`, { password });
+      const res = await axios.post(`${BASE_URL}/reset-password/${token}`, { password });
       setMsg(res.data.message);
       setTimeout(() => navigate('/login'), 2000);
     } catch (err) {
