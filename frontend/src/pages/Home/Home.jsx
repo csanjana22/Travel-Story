@@ -225,7 +225,7 @@ const Home = () => {
 
   return (
     <>
-    <div className="flex justify-center mt-6 mb-2">
+    <div className="flex justify-center mt-6 mb-2 px-4">
       <SearchBar
         value={searchQuery}
         onChange={e => setSearchQuery(e.target.value)}
@@ -233,18 +233,18 @@ const Home = () => {
         onClearSearch={handleManualClear}
       />
     </div>
-    <div className='container mx-auto py-10'>
 
+    <div className='container mx-auto py-10 px-3 md:px-5 lg:px-8'>
       <FilterInfoTitle 
        filterType={filterType}
        filterDates={dateRange}
        onClear={handleManualClear}
        />
-
-      <div className ='flex gap-7'>
+    
+      <div className ='flex flex-col-reverse lg:flex-row gap-7'>
         <div className='flex-1'>
           {allStories.length > 0 ? (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {allStories.map((item)=>{
                 return(
                   <TravelStoryCard
@@ -274,9 +274,9 @@ const Home = () => {
             />
           )}
 </div>
-        <div className='w-[350px]'>
+        <div className='w-full lg:w-[350px]'>
           <div className='bg-white border border-slate-200 shadow-lg shadow-slate-200/60 rounded-lg'>
-          <div className='p-3'>
+          <div className='p-3 flex justify-center'>
             <DayPicker
              captionLayout='dropdown-buttons'
              mode="range"
@@ -291,7 +291,7 @@ const Home = () => {
     </div>
 
     {/* Geotag Map below all stories */}
-    <div className='container mx-auto'>
+    <div className='container mx-auto px-4 md:px-6 lg:px-10'>
       <StoriesMap stories={allStories} onStoryClick={handleViewStory} />
     </div>
     
@@ -300,7 +300,15 @@ const Home = () => {
     <Modal 
     isOpen={openAddEditModal.isShown}
     onRequestClose={()=>{}}
-    style={{overlay:{backgroundColor:"rgba(0,0,0,0.2)",zIndex:999,},}}
+    style={{overlay:{backgroundColor:"rgba(0,0,0,0.2)",zIndex:999},content:{
+      width: "95%",
+      maxWidth: "800px",
+      height: "fit-content",
+      maxHeight: "90vh",
+      borderRadius: "12px",
+      padding: "20px"
+    }
+  }}
     className="model-box"
     >
       <AddEditTravelStory
@@ -317,7 +325,15 @@ const Home = () => {
     <Modal 
     isOpen={openViewModal.isShown}
     onRequestClose={()=>{}}
-    style={{overlay:{backgroundColor:"rgba(0,0,0,0.2)",zIndex:999,},}}
+    style={{overlay:{backgroundColor:"rgba(0,0,0,0.2)",zIndex:999,},content:{
+      width: "95%",
+      maxWidth: "800px",
+      height: "fit-content",
+      maxHeight: "90vh",
+      borderRadius: "12px",
+      padding: "20px"
+    }
+  }}
     className="model-box"
     >
     <ViewTravelStory
@@ -335,17 +351,18 @@ const Home = () => {
     </Modal> 
 
     <button
-      className='w-16 h-16 flex items-center justify-center rounded-full bg-primary hover:bg-cyan-400 fixed right-10 bottom-10 z-[9999]'
+      // className='w-16 h-16 flex items-center justify-center rounded-full bg-primary hover:bg-cyan-400 fixed right-10 bottom-10 z-[9999]'
+      className='w-14 h-14 md:w-16 md:h-16 flex items-center justify-center rounded-full bg-primary hover:bg-cyan-400 fixed right-6 bottom-6 md:right-10 md:bottom-10 z-[9999] shadow-2xl'
       onClick={()=>{
         setOpenAddEditModal({isShown:true, type:"add", data:null});
       }}
     >
-      <MdAdd className='text-[32px] text-white'/>
+      <MdAdd className='text-[28px] md:text-[32px] text-white'/>
     </button>
 
     <ToastContainer/>
-    <footer className="w-full bg-gray-100 text-center py-6 mt-10 border-t border-gray-200">
-        <p className="text-gray-600 text-sm">
+    <footer className="w-full bg-gray-100 text-center py-6 mt-10 border-t border-gray-200 px-4">
+        <p className="text-gray-600 text-xs md:text-sm">
           &copy; {new Date().getFullYear()} Travel Story App. Made with <span className="text-red-400">♥</span> by Sanjana.
         </p>
       </footer>
